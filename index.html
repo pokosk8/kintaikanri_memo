@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#eceff0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12181c" media="(prefers-color-scheme: dark)">
+<title>勤怠メモ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: phone-first single column, bottom tab bar.
+   The hazard stripe (工事看板の黄黒) is the only loud element; numerals use a road-sign style condensed face. */
+:root{
+  --bg:#eceff0; --surface:#ffffff; --soft:#f3f5f6; --ink:#182126; --muted:#56646d; --line:#d2d9dd;
+  --accent:#c4470b; --on-accent:#ffffff;
+  --safe:#1b7a4b; --hazard:#f4c400; --stripe:#1a2126;
+  --sat:#1e5fa8; --sun:#c0362c; --focus:#1e5fa8;
+  --font-body:"BIZ UDPGothic","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --font-num:"Barlow Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#12181c; --surface:#1b2328; --soft:#222c32; --ink:#e8edef; --muted:#9aa8b0; --line:#2c373d;
+    --accent:#ff8a3d; --on-accent:#1a1206;
+    --safe:#4cc38a; --stripe:#0c1012;
+    --sat:#6aa7ee; --sun:#ff8077; --focus:#8bbcf5;
+  }
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font:16px/1.5 var(--font-body);padding-top:env(safe-area-inset-top,0px)}
+body.lock{overflow:hidden}
+button,input,textarea{font:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+
+.hazard{height:8px;background:repeating-linear-gradient(-45deg,var(--hazard) 0 12px,var(--stripe) 12px 24px)}
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-block:14px 4px}
+.top h1{margin:0;font-size:15px;letter-spacing:.14em;font-weight:700}
+.who{color:var(--muted);font-size:14px}
+main{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+.view{display:flex;flex-direction:column;gap:16px;padding-top:8px}
+
+/* today */
+.dateline{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.dateline .d{font-size:18px;font-weight:700}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:4px 14px 4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:14px;font-weight:700;color:var(--muted)}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.chip[data-s="working"]{color:var(--accent);border-color:var(--accent)}
+.chip[data-s="working"] i{background:var(--accent);animation:pulse 1.6s ease-in-out infinite}
+.chip[data-s="done"]{color:var(--safe);border-color:var(--safe)}
+.chip[data-s="done"] i{background:var(--safe)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+.clock{display:flex;align-items:baseline;gap:8px;font-family:var(--font-num);font-variant-numeric:tabular-nums;line-height:1}
+.clock .hm{font-size:clamp(88px,27vw,132px);font-weight:600;letter-spacing:.01em}
+.clock .ss{font-size:clamp(30px,9vw,44px);font-weight:500;color:var(--muted)}
+
+.punch{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.punch-btn{min-height:88px;border:1px solid transparent;border-radius:14px;background:var(--accent);color:var(--on-accent);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;touch-action:manipulation}
+.punch-btn b{font-size:26px;letter-spacing:.24em;padding-left:.24em}
+.punch-btn small{font-family:var(--font-num);font-size:21px;font-weight:600;font-variant-numeric:tabular-nums}
+.punch-btn:not(:disabled):active{transform:scale(.98)}
+.punch-btn:disabled{background:var(--surface);border-color:var(--line);color:var(--muted);cursor:default}
+
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.metrics .m{padding:12px 8px;text-align:center;min-width:0}
+.metrics .m+.m{border-left:1px solid var(--line)}
+.metrics span{display:block;font-size:12px;font-weight:700;color:var(--muted)}
+.metrics b{font-family:var(--font-num);font-size:32px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
+.metrics .hot b{color:var(--accent)}
+
+.panel{display:grid;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field>span{font-size:13px;font-weight:700;color:var(--muted)}
+input,textarea{width:100%;min-width:0;height:48px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink)}
+textarea{height:auto;min-height:72px;padding:10px 12px;resize:vertical}
+input[type=time],input[type=number]{font-variant-numeric:tabular-nums}
+
+.today-actions{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px}
+.link{background:none;border:0;padding:10px 4px;min-height:44px;color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.link.armed{color:var(--sun)}
+
+.notice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--hazard);border-radius:10px;font-size:14px;background:color-mix(in srgb,var(--hazard) 16%,var(--surface))}
+.notice p{margin:0}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font-weight:700;cursor:pointer;text-align:center}
+.btn.primary{background:var(--accent);border-color:transparent;color:var(--on-accent)}
+.btn.danger{color:var(--sun)}
+.btn.armed{border-color:var(--sun);color:var(--sun);box-shadow:inset 0 0 0 2px var(--sun)}
+.btn:focus-within{outline:3px solid var(--focus);outline-offset:2px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* month */
+.monthbar{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;text-align:center}
+.monthbar h2{margin:0;font-size:20px}
+.icon{width:48px;height:48px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font-size:24px;line-height:1;cursor:pointer}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.summary div{padding:12px 6px;text-align:center;min-width:0}
+.summary div+div{border-left:1px solid var(--line)}
+.summary span{display:block;font-size:12px;font-weight:700;color:var(--muted)}
+.summary b{font-family:var(--font-num);font-size:28px;font-weight:600;line-height:1.2;font-variant-numeric:tabular-nums}
+.summary small{font-size:12px;color:var(--muted);margin-left:2px}
+.summary .hot b{color:var(--accent)}
+@media (max-width:359px){
+  .summary{grid-template-columns:repeat(2,1fr)}
+  .summary div:nth-child(3){border-left:0}
+  .summary div:nth-child(n+3){border-top:1px solid var(--line)}
+}
+.rows{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.rows li+li{border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;min-height:60px;padding:8px 14px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.row[data-today="true"]{background:var(--soft)}
+.rd{text-align:center;line-height:1}
+.rd b{display:block;font-family:var(--font-num);font-size:28px;font-weight:600}
+.rd i{font-style:normal;font-size:12px;font-weight:700;color:var(--muted)}
+.row[data-wd="6"] .rd b,.row[data-wd="6"] .rd i{color:var(--sat)}
+.row[data-wd="0"] .rd b,.row[data-wd="0"] .rd i{color:var(--sun)}
+.row[data-today="true"] .rd b{color:var(--accent)}
+.rm{display:grid;gap:2px;min-width:0}
+.site{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.site.none,.empty{color:var(--muted);font-weight:400}
+.empty{opacity:.7}
+.times{font-family:var(--font-num);font-size:17px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.times small{font-family:var(--font-body);font-size:12px}
+.tag{font-family:var(--font-body);font-size:12px;font-weight:700;color:var(--accent)}
+.rr{text-align:right;line-height:1.1}
+.rr b{display:block;font-family:var(--font-num);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.rr small{font-family:var(--font-num);font-size:15px;font-weight:600;color:var(--accent)}
+.rr .dash{color:var(--muted);font-weight:400}
+.export{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.foot{margin:0;font-size:13px;color:var(--muted)}
+
+/* settings */
+.sec{margin:8px 0 -6px;font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.stack{display:grid;gap:10px}
+.note{margin:0;font-size:14px;color:var(--muted)}
+
+/* sheet */
+.sheet{position:fixed;inset:0;z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.sheet-back{position:absolute;inset:0;background:rgba(8,12,14,.55)}
+.sheet-body{position:relative;width:100%;max-width:560px;max-height:92vh;max-height:92dvh;overflow:auto;display:grid;gap:14px;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));background:var(--surface);border-radius:18px 18px 0 0;outline:none}
+.sheet-body h2{margin:0;font-size:18px}
+.calc{margin:0;font-size:14px;color:var(--muted);min-height:1.5em}
+.err{margin:0;font-size:14px;font-weight:700;color:var(--sun);min-height:0}
+.sheet-actions{display:flex;gap:10px}
+.sheet-actions .save{flex:1}
+.sheet-actions #sheetDelete{margin-right:auto}
+
+/* nav + toast */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.nav-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.nav button{height:60px;border:0;background:none;color:var(--muted);font-size:15px;font-weight:700;cursor:pointer;box-shadow:inset 0 3px 0 transparent}
+.nav button[aria-current="page"]{color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:40;max-width:calc(100% - 32px);transform:translate(-50%,8px);padding:10px 18px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:14px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){
+  .chip[data-s="working"] i{animation:none}
+  .toast,.punch-btn{transition:none}
+  .punch-btn:not(:disabled):active{transform:none}
+}
+</style>
+</head>
+<body>
+<div class="hazard" aria-hidden="true"></div>
+<header class="wrap top">
+  <h1>勤怠メモ</h1>
+  <span id="who" class="who"></span>
+</header>
+
+<main class="wrap">
+
+  <!-- きょう -->
+  <section id="v-today" class="view">
+    <div id="stale" class="notice" hidden>
+      <p id="staleText"></p>
+      <button id="staleFix" class="link" type="button">直す</button>
+    </div>
+    <div class="dateline">
+      <span id="dateLabel" class="d"></span>
+      <span id="state" class="chip" data-s="idle"><i></i><b id="stateText">未出勤</b></span>
+    </div>
+    <div class="clock" aria-hidden="true"><span class="hm" id="clockHM">--:--</span><span class="ss" id="clockSS">--</span></div>
+    <div class="punch">
+      <button id="btnIn" class="punch-btn" type="button"><b>出勤</b><small id="inSub">タップで打刻</small></button>
+      <button id="btnOut" class="punch-btn" type="button"><b>退勤</b><small id="outSub">—</small></button>
+    </div>
+    <div id="metrics" class="metrics" hidden></div>
+    <div class="panel">
+      <label class="field"><span>現場名</span>
+        <input id="site" type="text" list="siteList" autocomplete="off" placeholder="例: 県道12号 舗装補修">
+      </label>
+      <label class="field"><span>休憩（分）</span>
+        <input id="brk" type="number" inputmode="numeric" min="0" max="480" step="5">
+      </label>
+    </div>
+    <div class="today-actions">
+      <button id="btnEditToday" class="link" type="button">手入力で記録する</button>
+      <button id="btnUndo" class="link" type="button" hidden>打刻を取り消す</button>
+    </div>
+  </section>
+
+  <!-- 月間 -->
+  <section id="v-month" class="view" hidden>
+    <div class="monthbar">
+      <button id="prevM" class="icon" type="button" aria-label="前の月">‹</button>
+      <h2 id="monthLabel"></h2>
+      <button id="nextM" class="icon" type="button" aria-label="次の月">›</button>
+    </div>
+    <div id="summary" class="summary"></div>
+    <ul id="rows" class="rows"></ul>
+    <div class="export">
+      <button id="btnCsv" class="btn primary" type="button">CSVを保存</button>
+      <button id="btnTsv" class="btn" type="button">表をコピー</button>
+    </div>
+    <p class="foot">日付をタップすると記録を追加・修正できます。「表をコピー」はExcelやスプレッドシートにそのまま貼れます。深夜は22:00〜5:00の重なりで、休憩を引かない概算です。</p>
+  </section>
+
+  <!-- 設定 -->
+  <section id="v-settings" class="view" hidden>
+    <h2 class="sec">基本設定</h2>
+    <div class="panel">
+      <label class="field"><span>名前（CSVのファイル名に入ります）</span>
+        <input id="sName" type="text" autocomplete="off" maxlength="40">
+      </label>
+      <div class="row2">
+        <label class="field"><span>所定労働時間（時間）</span>
+          <input id="sStd" type="number" inputmode="decimal" min="1" max="24" step="0.5">
+        </label>
+        <label class="field"><span>既定の休憩（分）</span>
+          <input id="sBrk" type="number" inputmode="numeric" min="0" max="480" step="5">
+        </label>
+      </div>
+      <p class="note">残業は、実働が所定労働時間を超えた分です。退勤が出勤より早い時刻なら、翌日に跨ぐ夜勤として計算します。</p>
+    </div>
+
+    <h2 class="sec">データ</h2>
+    <div class="panel">
+      <p class="note">記録はこの端末のこのブラウザにだけ保存されています。ブラウザのデータを消すと無くなるので、ときどきバックアップを取ってください。</p>
+      <div class="stack">
+        <button id="btnBackup" class="btn" type="button">バックアップを保存</button>
+        <button id="btnBackupCopy" class="btn" type="button">バックアップをコピー</button>
+        <label class="btn">バックアップを読み込む<input id="fileImport" class="vh" type="file" accept="application/json,.json"></label>
+        <div id="importInfo" class="notice" hidden>
+          <p id="importMsg"></p>
+          <span>
+            <button id="btnImportGo" class="link" type="button">読み込む</button>
+            <button id="btnImportNo" class="link" type="button">やめる</button>
+          </span>
+        </div>
+        <button id="btnWipe" class="btn danger" type="button">すべての記録を消す</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<datalist id="siteList"></datalist>
+
+<!-- 記録の追加・修正 -->
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-back" data-close></div>
+  <form id="sheetForm" class="sheet-body" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">
+    <h2 id="sheetTitle"></h2>
+    <label class="field"><span>現場名</span><input id="fSite" type="text" list="siteList" autocomplete="off"></label>
+    <div class="row2">
+      <label class="field"><span>出勤</span><input id="fStart" type="time"></label>
+      <label class="field"><span>退勤</span><input id="fEnd" type="time"></label>
+    </div>
+    <label class="field"><span>休憩（分）</span><input id="fBrk" type="number" inputmode="numeric" min="0" max="1440" step="5"></label>
+    <label class="field"><span>メモ</span><textarea id="fNote" rows="2"></textarea></label>
+    <p id="sheetCalc" class="calc"></p>
+    <p id="sheetErr" class="err" role="alert"></p>
+    <div class="sheet-actions">
+      <button id="sheetDelete" class="btn danger" type="button">削除</button>
+      <button class="btn" type="button" data-close>閉じる</button>
+      <button class="btn primary save" type="submit">保存</button>
+    </div>
+  </form>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<nav class="nav" aria-label="画面の切り替え">
+  <div class="nav-in">
+    <button type="button" data-view="today" aria-current="page">きょう</button>
+    <button type="button" data-view="month">月間</button>
+    <button type="button" data-view="settings">設定</button>
+  </div>
+</nav>
+
+<script>
+(() => {
+'use strict';
+
+const KEY = 'kintai.v1';
+const MAX_OPEN = 18 * 60;                       // 退勤なしのまま18時間たったら「退勤未入力」とみなす
+const NIGHT = [[0, 300], [1320, 1740], [2760, 3180]];  // 深夜 22:00〜5:00（分）。当日0-5時、当日22時〜翌5時、翌日22時以降
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+const DEFAULTS = { settings: { name: '', standardMin: 480, defaultBreak: 60 }, records: {} };
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const hm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+const fmt = m => `${Math.floor(m / 60)}:${pad(Math.round(m % 60))}`;
+const dec = m => (m / 60).toFixed(2);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const parseKey = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const dayLabel = k => { const d = parseKey(k); return `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}）`; };
+const startDateOf = k => { const d = parseKey(k); const [h, m] = state.records[k].start.split(':').map(Number); d.setHours(h, m, 0, 0); return d; };
+
+/* ---------- 保存 ---------- */
+function normalize(s) {
+  const st = (s && s.settings) || {};
+  const bk = parseInt(st.defaultBreak, 10);
+  const out = {
+    settings: {
+      name: String(st.name || '').slice(0, 40),
+      standardMin: clamp(parseInt(st.standardMin, 10) || 480, 60, 1440),
+      defaultBreak: clamp(Number.isFinite(bk) ? bk : 60, 0, 480)
+    },
+    records: {}
+  };
+  const rec = (s && s.records) || {};
+  for (const k of Object.keys(rec)) {
+    const r = rec[k];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !r || !/^\d{2}:\d{2}$/.test(r.start || '')) continue;
+    out.records[k] = {
+      site: String(r.site || '').slice(0, 80),
+      start: r.start,
+      end: /^\d{2}:\d{2}$/.test(r.end || '') ? r.end : '',
+      brk: clamp(parseInt(r.brk, 10) || 0, 0, 1440),
+      note: String(r.note || '').slice(0, 300)
+    };
+  }
+  return out;
+}
+let state = (() => {
+  try { const raw = localStorage.getItem(KEY); if (raw) return normalize(JSON.parse(raw)); } catch (e) { /* 保存領域が使えない */ }
+  return structuredClone(DEFAULTS);
+})();
+let warned = false;
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { if (!warned) { warned = true; toast('この端末では保存できません。ブラウザの設定を確認してください'); } }
+}
+
+/* ---------- 計算 ---------- */
+function calc(r) {
+  if (!r || !r.start || !r.end) return null;
+  const s = toMin(r.start);
+  let e = toMin(r.end);
+  const overnight = e < s;
+  if (overnight) e += 1440;
+  const gross = e - s;
+  const brk = Math.min(r.brk || 0, gross);
+  const work = gross - brk;
+  const over = Math.max(0, work - state.settings.standardMin);
+  let night = 0;
+  for (const [a, b] of NIGHT) night += Math.max(0, Math.min(e, b) - Math.max(s, a));
+  night = Math.min(night, work);
+  return { gross, brk, work, over, night, overnight };
+}
+function openInfo(now) {
+  let working = null;
+  const stale = [];
+  const keys = Object.keys(state.records).filter(k => !state.records[k].end).sort().reverse();
+  for (const k of keys) {
+    const el = Math.floor((now - startDateOf(k)) / 60000);
+    if (el >= MAX_OPEN) stale.push(k);
+    else if (!working) working = { key: k };
+  }
+  return { working, stale };
+}
+function lastSite() {
+  const keys = Object.keys(state.records).sort().reverse();
+  for (const k of keys) if (state.records[k].site) return state.records[k].site;
+  return '';
+}
+
+/* ---------- 小物 ---------- */
+let toastT;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 2600);
+}
+const armed = new WeakMap();
+function disarm(btn) {
+  const a = armed.get(btn);
+  if (!a) return;
+  clearTimeout(a.t);
+  btn.textContent = a.label;
+  btn.classList.remove('armed');
+  armed.delete(btn);
+}
+function confirmClick(btn, armedLabel, fn) {
+  if (armed.has(btn)) { disarm(btn); fn(); return; }
+  const label = btn.textContent;
+  btn.textContent = armedLabel;
+  btn.classList.add('armed');
+  armed.set(btn, { label, t: setTimeout(() => disarm(btn), 3500) });
+}
+function download(name, text, type) {
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  } catch (e) { return false; }
+}
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg); return; } catch (e) { /* フォールバックへ */ }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { /* 失敗 */ }
+  ta.remove();
+  toast(ok ? okMsg : 'コピーできませんでした');
+}
+
+/* ---------- きょう ---------- */
+let mode = 'idle', activeKey = null, shownDay = '', brkDirty = false, lastMetrics = '';
+
+function renderSites() {
+  const count = {};
+  for (const k of Object.keys(state.records)) { const s = state.records[k].site; if (s) count[s] = (count[s] || 0) + 1; }
+  $('siteList').innerHTML = Object.keys(count).sort((a, b) => count[b] - count[a]).slice(0, 30)
+    .map(s => `<option value="${esc(s)}"></option>`).join('');
+}
+
+function renderToday() {
+  const now = new Date();
+  const tk = ymd(now);
+  shownDay = tk;
+  const { working, stale } = openInfo(now);
+  const rec = state.records[tk];
+  if (working) { mode = 'working'; activeKey = working.key; }
+  else if (rec && rec.end) { mode = 'done'; activeKey = tk; }
+  else { mode = 'idle'; activeKey = null; }
+  const r = activeKey ? state.records[activeKey] : null;
+
+  $('dateLabel').textContent = dayLabel(tk);
+  $('state').dataset.s = mode;
+  $('stateText').textContent = { idle: '未出勤', working: '勤務中', done: '退勤済' }[mode];
+  $('btnIn').disabled = mode !== 'idle';
+  $('btnOut').disabled = mode !== 'working';
+  $('inSub').textContent = r ? r.start : 'タップで打刻';
+  $('outSub').textContent = mode === 'done' ? r.end : mode === 'working' ? 'タップで打刻' : '—';
+
+  if (r) {
+    if (document.activeElement !== $('site')) $('site').value = r.site;
+    if (document.activeElement !== $('brk')) $('brk').value = r.brk;
+  } else if (!brkDirty && document.activeElement !== $('brk')) {
+    $('brk').value = state.settings.defaultBreak;
+  }
+
+  $('btnEditToday').textContent = mode === 'idle' ? '手入力で記録する' : '今日の記録を修正';
+  $('btnUndo').hidden = mode === 'idle';
+  $('btnUndo').textContent = mode === 'working' ? '出勤を取り消す' : '退勤を取り消す';
+
+  if (stale.length) {
+    $('stale').hidden = false;
+    $('staleText').textContent = `${dayLabel(stale[0])}の退勤が入っていません` + (stale.length > 1 ? `（ほか${stale.length - 1}日）` : '');
+    $('staleFix').dataset.date = stale[0];
+  } else {
+    $('stale').hidden = true;
+  }
+  lastMetrics = '';
+  renderMetrics(now);
+}
+
+function renderMetrics(now) {
+  let cells = [];
+  if (mode === 'working') {
+    const r = state.records[activeKey];
+    const el = Math.max(0, Math.floor((now - startDateOf(activeKey)) / 60000));
+    const work = el - Math.min(r.brk || 0, el);
+    const std = state.settings.standardMin;
+    cells = [['経過', fmt(el), false], ['実働', fmt(work), false],
+             work < std ? ['所定まで', fmt(std - work), false] : ['残業', fmt(work - std), true]];
+  } else if (mode === 'done') {
+    const c = calc(state.records[activeKey]);
+    cells = [['実働', fmt(c.work), false], ['残業', fmt(c.over), c.over > 0], ['深夜', fmt(c.night), false]];
+  }
+  const html = cells.map(([l, v, hot]) => `<div class="m${hot ? ' hot' : ''}"><span>${l}</span><b>${v}</b></div>`).join('');
+  if (html !== lastMetrics) { $('metrics').innerHTML = html; lastMetrics = html; }
+  $('metrics').hidden = !cells.length;
+}
+
+function tick() {
+  const now = new Date();
+  $('clockHM').textContent = hm(now);
+  $('clockSS').textContent = pad(now.getSeconds());
+  if (ymd(now) !== shownDay) renderToday(); else renderMetrics(now);
+}
+
+$('btnIn').addEventListener('click', () => {
+  if (mode !== 'idle') return;
+  const now = new Date();
+  state.records[ymd(now)] = {
+    site: $('site').value.trim(), start: hm(now), end: '',
+    brk: clamp(parseInt($('brk').value, 10) || 0, 0, 1440), note: ''
+  };
+  brkDirty = false;
+  save(); renderAll();
+  toast(`${hm(now)} に出勤を記録しました`);
+});
+$('btnOut').addEventListener('click', () => {
+  if (mode !== 'working') return;
+  const now = new Date();
+  state.records[activeKey].end = hm(now);
+  save(); renderAll();
+  toast(`${hm(now)} に退勤を記録しました`);
+});
+$('site').addEventListener('input', () => {
+  if (!activeKey) return;
+  state.records[activeKey].site = $('site').value.trim();
+  save();
+});
+$('brk').addEventListener('input', () => {
+  if (!activeKey) { brkDirty = true; return; }
+  state.records[activeKey].brk = clamp(parseInt($('brk').value, 10) || 0, 0, 1440);
+  save(); lastMetrics = ''; renderMetrics(new Date());
+});
+$('site').addEventListener('change', renderSites);
+$('btnEditToday').addEventListener('click', () => openSheet(activeKey || ymd(new Date())));
+$('staleFix').addEventListener('click', () => openSheet($('staleFix').dataset.date));
+$('btnUndo').addEventListener('click', function () {
+  if (!activeKey) return;
+  confirmClick(this, 'もう一度押すと取り消し', () => {
+    if (mode === 'working') delete state.records[activeKey];
+    else state.records[activeKey].end = '';
+    save(); renderAll(); toast('取り消しました');
+  });
+});
+
+/* ---------- 月間 ---------- */
+const nowInit = new Date();
+const view = { y: nowInit.getFullYear(), m: nowInit.getMonth() };
+
+function monthKeys(y, m) {
+  const prefix = `${y}-${pad(m + 1)}-`;
+  return Object.keys(state.records).filter(k => k.startsWith(prefix)).sort();
+}
+
+function renderMonth() {
+  const { y, m } = view;
+  $('monthLabel').textContent = `${y}年${m + 1}月`;
+  const now = new Date();
+  const todayKey = ymd(now);
+  const { working } = openInfo(now);
+  const n = new Date(y, m + 1, 0).getDate();
+  const tot = { days: 0, work: 0, over: 0, night: 0 };
+  let html = '';
+  for (let d = 1; d <= n; d++) {
+    const dt = new Date(y, m, d);
+    const key = ymd(dt);
+    const r = state.records[key];
+    let mid, right = '';
+    if (r) {
+      const c = calc(r);
+      tot.days++;
+      if (c) { tot.work += c.work; tot.over += c.over; tot.night += c.night; }
+      const tag = r.end ? '' : (working && working.key === key ? '勤務中' : '退勤未入力');
+      const times = `${r.start}–${r.end ? ((c && c.overnight) ? '翌' : '') + r.end : ''}`;
+      mid = `<span class="site${r.site ? '' : ' none'}">${r.site ? esc(r.site) : '現場名なし'}</span>` +
+            `<span class="times">${times} <small>休${r.brk}</small>${tag ? ` <span class="tag">${tag}</span>` : ''}</span>`;
+      right = c ? `<b>${fmt(c.work)}</b>${c.over ? `<small>+${fmt(c.over)}</small>` : ''}` : '<b class="dash">—</b>';
+    } else {
+      mid = '<span class="empty">—</span>';
+    }
+    html += `<li><button class="row" type="button" data-date="${key}" data-wd="${dt.getDay()}" data-today="${key === todayKey}">` +
+            `<span class="rd"><b>${d}</b><i>${WD[dt.getDay()]}</i></span><span class="rm">${mid}</span><span class="rr">${right}</span></button></li>`;
+  }
+  $('rows').innerHTML = html;
+  $('summary').innerHTML =
+    `<div><span>出勤</span><b>${tot.days}</b><small>日</small></div>` +
+    `<div><span>実働</span><b>${fmt(tot.work)}</b></div>` +
+    `<div class="${tot.over ? 'hot' : ''}"><span>残業</span><b>${fmt(tot.over)}</b></div>` +
+    `<div><span>深夜</span><b>${fmt(tot.night)}</b></div>`;
+}
+$('rows').addEventListener('click', e => {
+  const b = e.target.closest('.row');
+  if (b) openSheet(b.dataset.date);
+});
+$('prevM').addEventListener('click', () => { view.m--; if (view.m < 0) { view.m = 11; view.y--; } renderMonth(); });
+$('nextM').addEventListener('click', () => { view.m++; if (view.m > 11) { view.m = 0; view.y++; } renderMonth(); });
+
+/* 表の書き出し */
+function monthTable(y, m) {
+  const keys = monthKeys(y, m);
+  const safe = s => (/^[=+\-@]/.test(s) ? "'" + s : s);   // Excelで数式扱いされないように
+  const rows = [['日付', '曜日', '現場名', '出勤', '退勤', '休憩(分)', '実働(時間)', '残業(時間)', '深夜(時間)', 'メモ']];
+  let tw = 0, to = 0, tn = 0;
+  for (const k of keys) {
+    const r = state.records[k];
+    const c = calc(r);
+    if (c) { tw += c.work; to += c.over; tn += c.night; }
+    rows.push([k, WD[parseKey(k).getDay()], safe(r.site), r.start, r.end, r.brk,
+               c ? dec(c.work) : '', c ? dec(c.over) : '', c ? dec(c.night) : '', safe(r.note)]);
+  }
+  rows.push(['合計', '', '', '', '', '', dec(tw), dec(to), dec(tn), '']);
+  return { rows, count: keys.length };
+}
+$('btnCsv').addEventListener('click', () => {
+  const { y, m } = view;
+  const { rows, count } = monthTable(y, m);
+  if (!count) { toast('この月の記録がありません'); return; }
+  const q = v => { const s = String(v == null ? '' : v); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const text = '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n') + '\r\n';
+  const nm = state.settings.name.replace(/[\\/:*?"<>|]/g, '').trim();
+  const file = `勤怠_${y}-${pad(m + 1)}${nm ? '_' + nm : ''}.csv`;
+  toast(download(file, text, 'text/csv;charset=utf-8') ? 'CSVを保存しました' : '保存できませんでした。「表をコピー」を使ってください');
+});
+$('btnTsv').addEventListener('click', () => {
+  const { rows, count } = monthTable(view.y, view.m);
+  if (!count) { toast('この月の記録がありません'); return; }
+  copyText(rows.map(r => r.map(v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n'), '表をコピーしました');
+});
+
+/* ---------- 記録の追加・修正 ---------- */
+let sheetKey = null;
+function openSheet(key) {
+  sheetKey = key;
+  const r = state.records[key];
+  $('sheetTitle').textContent = dayLabel(key) + (r ? 'の記録' : 'の記録を追加');
+  $('fSite').value = r ? r.site : lastSite();
+  $('fStart').value = r ? r.start : '';
+  $('fEnd').value = r ? r.end : '';
+  $('fBrk').value = r ? r.brk : state.settings.defaultBreak;
+  $('fNote').value = r ? r.note : '';
+  $('sheetDelete').hidden = !r;
+  $('sheetErr').textContent = '';
+  updateSheetCalc();
+  $('sheet').hidden = false;
+  document.body.classList.add('lock');
+  $('sheetForm').focus();
+}
+function closeSheet() {
+  disarm($('sheetDelete'));
+  $('sheet').hidden = true;
+  document.body.classList.remove('lock');
+}
+function updateSheetCalc() {
+  const start = $('fStart').value, end = $('fEnd').value;
+  if (!start || !end) { $('sheetCalc').textContent = '出勤と退勤を入れると、実働を計算します。'; return; }
+  const c = calc({ start, end, brk: parseInt($('fBrk').value, 10) || 0 });
+  $('sheetCalc').textContent = `実働 ${fmt(c.work)}　残業 ${fmt(c.over)}　深夜 ${fmt(c.night)}` + (c.overnight ? '　（翌日の退勤）' : '');
+}
+['fStart', 'fEnd', 'fBrk'].forEach(id => $(id).addEventListener('input', updateSheetCalc));
+$('sheet').addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+$('sheetForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const start = $('fStart').value;
+  if (!start) { $('sheetErr').textContent = '出勤の時刻を入れてください'; $('fStart').focus(); return; }
+  state.records[sheetKey] = {
+    site: $('fSite').value.trim(), start, end: $('fEnd').value,
+    brk: clamp(parseInt($('fBrk').value, 10) || 0, 0, 1440), note: $('fNote').value.trim()
+  };
+  save(); closeSheet(); renderAll(); toast('保存しました');
+});
+$('sheetDelete').addEventListener('click', function () {
+  confirmClick(this, 'もう一度押すと削除', () => {
+    delete state.records[sheetKey];
+    save(); closeSheet(); renderAll(); toast('削除しました');
+  });
+});
+
+/* ---------- 設定・データ ---------- */
+function renderSettings() {
+  $('sName').value = state.settings.name;
+  $('sStd').value = state.settings.standardMin / 60;
+  $('sBrk').value = state.settings.defaultBreak;
+  $('who').textContent = state.settings.name;
+}
+$('sName').addEventListener('change', () => {
+  state.settings.name = $('sName').value.trim().slice(0, 40);
+  save(); renderSettings();
+});
+$('sStd').addEventListener('change', () => {
+  const h = parseFloat($('sStd').value);
+  if (!(h >= 1 && h <= 24)) { renderSettings(); toast('1〜24時間の間で入れてください'); return; }
+  state.settings.standardMin = Math.round(h * 60);
+  save(); renderAll();
+});
+$('sBrk').addEventListener('change', () => {
+  const b = parseInt($('sBrk').value, 10);
+  if (!(b >= 0 && b <= 480)) { renderSettings(); toast('0〜480分の間で入れてください'); return; }
+  state.settings.defaultBreak = b;
+  save(); renderAll();
+});
+
+const backupText = () => JSON.stringify({ app: 'kintai', version: 1, exportedAt: new Date().toISOString(), settings: state.settings, records: state.records }, null, 2);
+$('btnBackup').addEventListener('click', () => {
+  toast(download(`勤怠バックアップ_${ymd(new Date())}.json`, backupText(), 'application/json') ? 'バックアップを保存しました' : '保存できませんでした。「バックアップをコピー」を使ってください');
+});
+$('btnBackupCopy').addEventListener('click', () => copyText(backupText(), 'バックアップをコピーしました'));
+
+let pendingImport = null;
+$('fileImport').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const j = JSON.parse(await f.text());
+    const n = normalize(j);
+    const cnt = Object.keys(n.records).length;
+    if (!cnt && !(j && j.settings)) throw new Error('empty');
+    pendingImport = n;
+    $('importMsg').textContent = `${cnt}日分の記録が入っています。読み込むと今のデータは置き換わります。`;
+    $('importInfo').hidden = false;
+  } catch (err) { toast('読み込めないファイルでした'); }
+});
+$('btnImportGo').addEventListener('click', () => {
+  if (!pendingImport) return;
+  state = pendingImport; pendingImport = null;
+  $('importInfo').hidden = true;
+  save(); renderAll(); toast('読み込みました');
+});
+$('btnImportNo').addEventListener('click', () => { pendingImport = null; $('importInfo').hidden = true; });
+$('btnWipe').addEventListener('click', function () {
+  confirmClick(this, 'もう一度押すと全部消えます', () => {
+    state = structuredClone(DEFAULTS);
+    save(); renderAll(); toast('すべて消しました');
+  });
+});
+
+/* ---------- 画面の切り替え ---------- */
+function show(name) {
+  for (const v of ['today', 'month', 'settings']) $('v-' + v).hidden = v !== name;
+  document.querySelectorAll('.nav button').forEach(b => {
+    if (b.dataset.view === name) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  if (name === 'month') { view.y = new Date().getFullYear(); view.m = new Date().getMonth(); renderMonth(); }
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('.nav button').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+
+function renderAll() { renderSites(); renderToday(); renderMonth(); renderSettings(); }
+
+/* ---------- 起動 ---------- */
+$('site').value = lastSite();
+renderAll();
+tick();
+setInterval(tick, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderToday(); tick(); } });
+})();
+</script>
+</body>
+</html>
